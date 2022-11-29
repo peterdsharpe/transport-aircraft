@@ -1160,6 +1160,6 @@ if __name__ == '__main__':
         va="center",
         fontsize=16,
     )
-    p.show_plot(dpi=300)
+    p.show_plot(dpi=300, savefig="figures/mass_budget.svg")
 
     ##### Section: Payload-Range diagram
