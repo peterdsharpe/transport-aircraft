@@ -1141,7 +1141,7 @@ if __name__ == '__main__':
         y_pie = np.sin(np.deg2rad(ang))
         x_text = 1.2 * np.sign(x_pie)
         kw["arrowprops"].update(dict(
-            connectionstyle=f"arc,angleA={180 if w.is_right else 0},angleB={ang},armA=40,armB=40,rad=20",
+            connectionstyle=f"arc,angleA={180 if w.is_right else 0},angleB={ang},armA=10,armB=10,rad=5",
             relpos=(0 if w.is_right else 1, 0.5)
         ))
         ax.annotate(
