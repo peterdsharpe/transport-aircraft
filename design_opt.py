@@ -1052,7 +1052,7 @@ if __name__ == '__main__':
     )
 
     ##### Section: Mass Budget
-    fig, ax = plt.subplots(figsize=(10, 6), subplot_kw=dict(aspect="equal"))
+    fig, ax = plt.subplots(figsize=(10, 6), subplot_kw=dict(aspect="equal"), dpi=300)
 
     name_remaps = {
         "apu"                         : "APU",
@@ -1141,7 +1141,7 @@ if __name__ == '__main__':
         y_pie = np.sin(np.deg2rad(ang))
         x_text = 1.2 * np.sign(x_pie)
         kw["arrowprops"].update(dict(
-            connectionstyle=f"arc,angleA={180 if w.is_right else 0},angleB={ang},armA=10,armB=10,rad=5",
+            connectionstyle=f"arc,angleA={180 if w.is_right else 0},angleB={ang},armA=40,armB=40,rad=20",
             relpos=(0 if w.is_right else 1, 0.5)
         ))
         ax.annotate(
@@ -1160,6 +1160,6 @@ if __name__ == '__main__':
         va="center",
         fontsize=16,
     )
-    p.show_plot(dpi=300, savefig="figures/mass_budget.svg")
+    p.show_plot(savefig="figures/mass_budget.png")
 
     ##### Section: Payload-Range diagram
