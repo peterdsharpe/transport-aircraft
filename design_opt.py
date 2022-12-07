@@ -512,11 +512,6 @@ airplane = asb.Airplane(
     fuselages=[
         fuse
     ],
-    analysis_specific_options={
-        asb.AeroBuildup: dict(
-            additional_CD=0.0060
-        )
-    }
 )
 
 ##### Section: Vehicle Overall Specs
@@ -962,6 +957,8 @@ aero = asb.AeroBuildup(
     xyz_ref=mass_props_half_fuel.xyz_cg
 ).run()
 
+aero["D"] = aero["D"] + 0.0060 * airplane.s_ref * dyn.op_point.dynamic_pressure()
+
 opti.subject_to([
     aero["L"] / 1e6 == g * mass_props_half_fuel.mass / 1e6
 ])
@@ -1030,6 +1027,11 @@ if __name__ == '__main__':
     print_title("Mass props")
     for k, v in mass_props.items():
         print(f"{k.rjust(25)} = {v.mass:.0f} kg")
+
+    ##### Section: Geometry
+    airplane.draw_three_view(show=False)
+    plt.savefig("figures/three_view.png")
+    plt.show()
 
     ##### Section: Aero Polar
 

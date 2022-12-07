@@ -7,4 +7,6 @@ transport.
 
 Work in progress.
 
+![three-view](figures/three_view.png)
+
 ![massbudget](figures/mass_budget.png)
