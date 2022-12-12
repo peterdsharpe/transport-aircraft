@@ -14,6 +14,9 @@ n_pax = 400
 # fuel_type = "Jet A"
 fuel_type = "hydrogen"
 
+reference_engine="GE9X"
+# reference_engine="GE90"
+
 ##### Section: Fuel Properties
 if fuel_type == "hydrogen":
     fuel_tank_wall_thickness = 0.0612  # from Brewer, Hydrogen Aircraft Technology pg. 203
@@ -24,7 +27,7 @@ elif fuel_type == "Jet A":
     fuel_tank_wall_thickness = 0.005
     fuel_density = 820  # kg/m^3
     fuel_specific_energy = 43.02e6  # J/kg
-    fuel_tank_fuel_mass_fraction = 0.95
+    fuel_tank_fuel_mass_fraction = 0.993
 else:
     raise ValueError("Bad value of `fuel_type`!")
 
@@ -58,12 +61,14 @@ fuselage_cabin_xsec_area = np.pi * fuselage_cabin_radius ** 2
 
 fuselage_cabin_length = opti.variable(
     init_guess=123.2 * u.foot,
+    # init_guess=123.2 * u.foot,
     lower_bound=1e-3,
     freeze=True,
 )
 fwd_fuel_tank_length = opti.variable(
     init_guess=6,
-    lower_bound=1e-3,
+    # lower_bound=1e-3,
+    log_transform=True
     # freeze=True,
 )
 aft_fuel_tank_length = fwd_fuel_tank_length
@@ -298,7 +303,8 @@ wing_airfoil.generate_polars(
 wing_span = opti.variable(
     init_guess=214 * u.foot,
     lower_bound=0,
-    freeze=True)
+    freeze=True
+)
 wing_half_span = wing_span / 2
 
 wing_root_chord = opti.variable(
@@ -405,7 +411,7 @@ elevator = asb.ControlSurface(
     name="All-moving Elevator",
     deflection=opti.variable(
         init_guess=0,
-        freeze=True
+        # freeze=True
     )
 )
 
@@ -525,7 +531,7 @@ ultimate_load_factor = 1.5 * 2.5
 
 n_engines = 2
 
-LD_estimate = 15
+LD_estimate = 16
 design_climb_rate = 2000 * u.foot / u.minute
 g = 9.81
 design_V_climb = 250 * u.knot
@@ -706,28 +712,43 @@ mass_props["fuselage"] = asb.mass_properties_from_radius_of_gyration(
 # Engine mass
 
 # Size/weight estimates relative to a GE9X
-GE9X_thrust = 110000 * u.lbf
-GE9X_fan_diameter = 134 * u.inch
-GE9X_outer_diameter = 163.7 * u.inch
-GE9X_mass = 21230 * u.lbm
-GE9X_TSFC_lb_lb_hour = 0.490  # lb/lb-hr
-GE9X_Isp = 3600 / GE9X_TSFC_lb_lb_hour
+if reference_engine == "GE9X":
+    ref_engine = dict(
+        thrust=110000 * u.lbf,
+        fan_diameter = 134 * u.inch,
+        outer_diameter = 163.7 * u.inch,
+        mass = 21230 * u.lbm,
+        TSFC_lb_lb_hour = 0.490  # lb/lb-hr
+    )
+elif reference_engine == "GE90":
+    ref_engine = dict(
+        thrust=97300 * u.lbf,
+        fan_diameter = 123 * u.inch,
+        outer_diameter = 134 * u.inch,
+        mass = 17400 * u.lbm,
+        TSFC_lb_lb_hour = 0.520  # lb/lb-hr
+    )
+else:
+    raise ValueError("Bad value of `reference_engine`!")
 
-Isp = GE9X_Isp * (fuel_specific_energy / 43.02e6)
+ref_engine["Isp"] = 3600 / ref_engine["TSFC_lb_lb_hour"]
 
-design_max_thrust_ratio_to_GE9X = (
+
+Isp = ref_engine["Isp"] * (fuel_specific_energy / 43.02e6)
+
+design_max_thrust_ratio_to_ref_engine = (
         design_thrust_climb_engine /
-        GE9X_thrust
+        ref_engine["thrust"]
 )
 
-engine_fan_diameter = GE9X_fan_diameter * design_max_thrust_ratio_to_GE9X ** 0.5
-engine_outer_diameter = GE9X_outer_diameter * design_max_thrust_ratio_to_GE9X ** 0.5
+engine_fan_diameter = ref_engine["fan_diameter"] * design_max_thrust_ratio_to_ref_engine ** 0.5
+engine_outer_diameter = ref_engine["outer_diameter"] * design_max_thrust_ratio_to_ref_engine ** 0.5
 x_engines = wing_x_le + wing_yehudi_x
 
 mass_props["engines"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
-            n_engines * GE9X_mass *
-            design_max_thrust_ratio_to_GE9X ** 1.1
+            n_engines * ref_engine["mass"] *
+            design_max_thrust_ratio_to_ref_engine ** 1.1
     ),
     x_cg=x_engines
 )
@@ -960,7 +981,8 @@ aero = asb.AeroBuildup(
 aero["D"] = aero["D"] + 0.0060 * airplane.s_ref * dyn.op_point.dynamic_pressure()
 
 opti.subject_to([
-    aero["L"] / 1e6 == g * mass_props_half_fuel.mass / 1e6
+    aero["L"] / 1e6 == g * mass_props_half_fuel.mass / 1e6,
+    aero["Cm"] == 0
 ])
 
 LD = aero["L"] / aero["D"]
