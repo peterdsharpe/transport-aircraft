@@ -428,7 +428,7 @@ hstab_tip = asb.WingXSec(
 )
 
 # Assemble the hstab
-hstab_x_le = x_tail - 2 * hstab_root_chord
+hstab_x_le = x_tail - 1.5 * hstab_root_chord
 hstab_z_le = 0.5 * fuselage_cabin_radius
 
 hstab = asb.Wing(
@@ -485,7 +485,7 @@ vstab_tip = asb.WingXSec(
 )
 
 # Assemble the vstab
-vstab_x_le = x_tail - 2 * vstab_root_chord
+vstab_x_le = x_tail - 1.5 * vstab_root_chord
 vstab_z_le = 1 * fuselage_cabin_radius
 
 vstab = asb.Wing(
@@ -1031,6 +1031,7 @@ if __name__ == '__main__':
     ##### Section: Geometry
     airplane.draw_three_view(show=False)
     plt.savefig("figures/three_view.png")
+    plt.savefig("figures/three_view.svg")
     plt.show()
 
     ##### Section: Aero Polar
