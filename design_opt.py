@@ -571,8 +571,8 @@ mach_cruise = opti.variable(
 altitude_cruise = opti.variable(
     init_guess=35e3 * u.foot,
     scale=10e3 * u.foot,
-    lower_bound=0,
-    upper_bound=4e5 * u.foot,
+    lower_bound=10e3 * u.foot, # Speed regulations
+    upper_bound=400e3 * u.foot,
     # freeze=True
 )
 atmo = asb.Atmosphere(altitude=altitude_cruise)
@@ -1151,11 +1151,23 @@ if __name__ == '__main__':
         list(flight_ranges / u.naut_mile) + [0],
         list(pax_frac * n_pax) + [n_pax],
     )
+    ax1.fill_between(
+        list(flight_ranges / u.naut_mile) + [0],
+        0,
+        list(pax_frac * n_pax) + [n_pax],
+        alpha=0.2
+    )
     plt.xlim(left=0)
     plt.ylim(bottom=0)
     p.set_ticks(2000, 500, 100, 25)
     plt.xlabel("Flight Range [nmi]")
-    plt.ylabel("Number of Passengers")
+    plt.ylabel("Payload Capability\n(Number of Passengers)")
+
+    p.vline(
+        mission_range / u.naut_mile,
+        text=f"Design Range ({mission_range/u.naut_mile:.0f} nmi)",
+        alpha=0.5
+    )
 
     ax2 = ax1.twinx()
     mass_per_pax = mass_props["passengers"].mass / n_pax
