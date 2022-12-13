@@ -15,13 +15,14 @@ opti = asb.Opti(
 ##### Section: Parameters
 
 mission_range = 7500 * u.naut_mile
+# mission_range = opti.variable(init_guess=2500 * u.naut_mile)
 n_pax = 400
 
 # fuel_type = "Jet A"
 fuel_type = "LH2"
 # fuel_type = "GH2"
 
-reference_engine="GE9X"
+reference_engine = "GE9X"
 # reference_engine = "GE90"
 
 ##### Section: Fuel Properties
@@ -42,8 +43,6 @@ elif fuel_type == "Jet A":
     fuel_tank_fuel_mass_fraction = 0.993
 else:
     raise ValueError("Bad value of `fuel_type`!")
-
-
 
 ##### Section: Vehicle Definition
 
@@ -531,7 +530,7 @@ airplane = asb.Airplane(
 ##### Section: Vehicle Overall Specs
 design_mass_TOGW = opti.variable(
     init_guess=299370,
-    lower_bound=0,
+    log_transform=True
     # freeze=True
 )
 
@@ -546,15 +545,20 @@ elif n_engines == 3:
 else:
     required_engine_out_climb_gradient = 3.0
 
-LD_cruise = 10
+LD_cruise = opti.variable(
+    init_guess=15,
+    log_transform=True,
+)
 
 g = 9.81
+
+LD_engine_out = 0.50 * LD_cruise  # accounting for flaps, gear down, imperfect flying
 
 design_thrust_cruise_total = (
         design_mass_TOGW * g / LD_cruise  # cruise component
 )
 design_max_thrust_engine = (
-                                   design_thrust_cruise_total +
+                                   design_mass_TOGW * g / LD_engine_out +
                                    design_mass_TOGW * g * (required_engine_out_climb_gradient / 100)
                            ) / (n_engines - 1)
 
@@ -765,7 +769,11 @@ mass_props["engines"] = asb.mass_properties_from_radius_of_gyration(
 )
 
 # Landing gear mass
-main_landing_gear_length = 1.1 * engine_outer_diameter
+main_landing_gear_length = np.softmax(
+    1.1 * engine_outer_diameter,
+    (fuse.length() / 2) * np.tand(3.5),
+    hardness=10
+)
 main_landing_gear_n_wheels = 6
 main_landing_gear_n_shock_struts = 2
 main_landing_gear_design_V_stall = 51 * u.knot
@@ -784,7 +792,7 @@ mass_props["main_landing_gear"] = asb.mass_properties_from_radius_of_gyration(
     x_cg=wing.xsecs[0].xyz_le[0] + wing.xsecs[0].chord
 )
 
-nose_landing_gear_length = 0.9 * engine_outer_diameter
+nose_landing_gear_length = 0.9 / 1.1 * main_landing_gear_length
 nose_landing_gear_n_wheels = 2
 
 mass_props["nose_landing_gear"] = asb.mass_properties_from_radius_of_gyration(
@@ -990,18 +998,18 @@ aero = asb.AeroBuildup(
 ).run()
 
 aero["D"] = aero["D"] + 0.0060 * airplane.s_ref * dyn.op_point.dynamic_pressure()
+aero["CD"] = aero["D"] / dyn.op_point.dynamic_pressure() / airplane.s_ref
 
 opti.subject_to([
     aero["L"] / 1e6 == g * mass_props_half_fuel.mass / 1e6,
+    LD_cruise * aero["CD"] == aero["CL"],
     aero["Cm"] == 0
 ])
-
-LD = aero["L"] / aero["D"]
 
 ##### Section: Compute Range
 flight_range = (
         V_cruise *
-        LD *
+        LD_cruise *
         Isp *
         np.log(
             mass_props_TOGW.mass / mass_props_with_pax.mass
@@ -1010,6 +1018,11 @@ flight_range = (
 
 # TODO add boiloff
 
+##### Section: Compute other quantities
+excess_thrust = (design_max_thrust_engine * n_engines) - design_thrust_cruise_total
+climb_rate = excess_thrust * (250 * u.knot) / (mass_props_TOGW.mass * 9.81)
+climb_rate_ft_min = climb_rate / (u.foot / u.minute)
+
 opti.subject_to([
     flight_range / mission_range > 1
 ])
@@ -1017,6 +1030,7 @@ opti.subject_to([
 ##### Section: Finalize Optimization Problem
 # opti.minimize(design_mass_TOGW)
 opti.minimize(fwd_fuel_tank_length)
+# opti.minimize(-mission_range / u.naut_mile)
 
 if __name__ == '__main__':
     try:
@@ -1041,7 +1055,7 @@ if __name__ == '__main__':
     for k, v in {
         "flight_range_nmi"    : flight_range / u.naut_mile,
         "mass_fuel_per_pax_mi": mass_props["fuel"].mass / (n_pax * (flight_range / u.naut_mile)),
-        "L/D"                 : LD,
+        "L/D"                 : LD_cruise,
     }.items():
         print(f"{k.rjust(25)} = {s(v):.6g}")
 
@@ -1088,7 +1102,7 @@ if __name__ == '__main__':
     )
 
     ##### Section: Mass Budget
-    fig, ax = plt.subplots(figsize=(12, 9), subplot_kw=dict(aspect="equal"), dpi=300)
+    fig, ax = plt.subplots(figsize=(12, 5), subplot_kw=dict(aspect="equal"), dpi=300)
 
     name_remaps = {
         **{
@@ -1117,115 +1131,39 @@ if __name__ == '__main__':
         startangle=110,
         arm_length=30,
         arm_radius=20,
-        y_max_labels=1.5
+        y_max_labels=1.1
     )
     p.show_plot(savefig="figures/mass_budget.png")
-    #
-    # name_remaps = {
-    #     "apu"                         : "APU",
-    #     "wing"                        : "Wing Structure",
-    #     "hstab"                       : "H-Stab Structure",
-    #     "vstab"                       : "V-Stab Structure",
-    #     "fuselage"                    : "Fuselage Structure",
-    #     "payload_proportional_weights": "FAs, Food, Galleys, Lavatories,\nLuggage Hold, Doors, Lighting,\nAir Cond., Entertainment"
-    # }
-    #
-    #
-    # def get_name(s):
-    #     if s in name_remaps:
-    #         return name_remaps[s]
-    #     else:
-    #         return s.replace("_", " ").title()
-    #
-    #
-    # pie = {
-    #     get_name(k): v.mass
-    #     for k, v in mass_props.items()
-    # }
-    # colors = p.sns.color_palette("husl", n_colors=len(pie))
-    #
-    #
-    # def pie_format(name: str, value: float):
-    #     pct = value / s(mass_props_TOGW.mass) * 100
-    #     joiner = ", " if len(name) < 20 else "\n"
-    #     if pct > 0.5:
-    #         data = f"{value:.0f} kg, {pct:.0f}%"
-    #     else:
-    #         data = f"{value:.0f} kg"
-    #
-    #     label = name + joiner + data
-    #     return label
-    #
-    #
-    # pie_labels = [
-    #     pie_format(k, v)
-    #     for k, v in pie.items()
-    # ]
-    #
-    # wedges, texts = ax.pie(
-    #     list(pie.values()),
-    #     colors=colors,
-    #     startangle=0,
-    #     wedgeprops=dict(
-    #         width=0.5
-    #     )
-    # )
-    #
-    # kw = dict(
-    #     arrowprops=dict(arrowstyle="-", color="k"),
-    #     zorder=0,
-    #     va="center"
-    # )
-    #
-    # for w in wedges:
-    #     w.theta_mid = (w.theta2 - w.theta1) / 2. + w.theta1
-    #     w.x_pie = np.cos(np.deg2rad(w.theta_mid))
-    #     w.y_pie = np.sin(np.deg2rad(w.theta_mid))
-    #     w.is_right = w.x_pie > 0
-    #
-    # left_wedges = []
-    # right_wedges = []
-    # for w in wedges:
-    #     if w.is_right:
-    #         right_wedges.append(w)
-    #     else:
-    #         left_wedges.append(w)
-    #
-    # y_texts_left = 1.4 * np.linspace(-1, 1, len(left_wedges))
-    # y_texts_right = 1.4 * np.linspace(-1, 1, len(right_wedges))
-    #
-    # left_wedge_order = np.argsort([w.y_pie for w in left_wedges])
-    # for i, w in enumerate(np.array(left_wedges, "O")[left_wedge_order]):
-    #     w.y_text = y_texts_left[i]
-    #
-    # right_wedge_order = np.argsort([w.y_pie for w in right_wedges])
-    # for i, w in enumerate(np.array(right_wedges, "O")[right_wedge_order]):
-    #     w.y_text = y_texts_right[i]
-    #
-    # for i, w in enumerate(wedges):
-    #     ang = (w.theta2 - w.theta1) / 2. + w.theta1
-    #     x_pie = np.cos(np.deg2rad(ang))
-    #     y_pie = np.sin(np.deg2rad(ang))
-    #     x_text = 1.2 * np.sign(x_pie)
-    #     kw["arrowprops"].update(dict(
-    #         connectionstyle=f"arc,angleA={180 if w.is_right else 0},angleB={ang},armA=40,armB=40,rad=20",
-    #         relpos=(0 if w.is_right else 1, 0.5)
-    #     ))
-    #     ax.annotate(
-    #         pie_labels[i],
-    #         xy=(w.x_pie, w.y_pie),
-    #         xytext=(x_text, w.y_text),
-    #         horizontalalignment="left" if w.is_right else "right",
-    #         **kw
-    #     )
-    #
-    # plt.text(
-    #     x=0,
-    #     y=0,
-    #     s=f"$\\bf{{Mass\\ Budget}}$\nTOGW: {s(mass_props_TOGW.mass):.0f} kg\nOEW: {s(mass_props_empty.mass):.0f} kg",
-    #     ha="center",
-    #     va="center",
-    #     fontsize=16,
-    # )
 
     ##### Section: Payload-Range diagram
+    pax_frac = np.linspace(0, 1)
+    flight_ranges = s(
+        V_cruise *
+        LD_cruise *
+        Isp *
+        np.log(
+            (mass_props_empty.mass + pax_frac * mass_props["passengers"].mass + mass_props["fuel"].mass) /
+            (mass_props_empty.mass + pax_frac * mass_props["passengers"].mass)
+        )
+    )
+    fig, ax1 = plt.subplots()
+    ax1.plot(
+        list(flight_ranges / u.naut_mile) + [0],
+        list(pax_frac * n_pax) + [n_pax],
+    )
+    plt.xlim(left=0)
+    plt.ylim(bottom=0)
+    p.set_ticks(2000, 500, 100, 25)
+    plt.xlabel("Flight Range [nmi]")
+    plt.ylabel("Number of Passengers")
+
+    ax2 = ax1.twinx()
+    mass_per_pax = mass_props["passengers"].mass / n_pax
+    ax2.set_ylim([mass_per_pax * y for y in ax1.get_ylim()])
+    ax2.grid(False)
+    p.set_ticks(None, None, 100 * mass_per_pax, 25 * mass_per_pax)
+    plt.ylabel("Payload Mass [kg]")
+
+    p.show_plot(
+        "LH2 Airplane Payload-Range Diagram",
+    )
