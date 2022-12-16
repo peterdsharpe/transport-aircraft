@@ -571,7 +571,7 @@ mach_cruise = opti.variable(
 altitude_cruise = opti.variable(
     init_guess=35e3 * u.foot,
     scale=10e3 * u.foot,
-    lower_bound=10e3 * u.foot, # Speed regulations
+    lower_bound=10e3 * u.foot,  # Speed regulations
     upper_bound=400e3 * u.foot,
     # freeze=True
 )
@@ -624,6 +624,8 @@ mass_props["payload_proportional_weights"] = asb.mass_properties_from_radius_of_
     radius_of_gyration_z=fuselage_cabin_length / 12 ** 0.5,
 )
 
+# Mass of the buoyancy (e.g., air in the pressurized cabin).
+# This is because the pressurized cabin air has a higher density than the ambient air at altitude.
 cabin_atmo = asb.Atmosphere(
     altitude=8000 * u.foot  # pressure altitude inside cabin
 )
@@ -639,7 +641,7 @@ mass_props["buoyancy"] = asb.mass_properties_from_radius_of_gyration(
     radius_of_gyration_z=fuselage_cabin_length / 12 ** 0.5,
 )
 
-# Wing/hstab/vstab mass accounting
+# Wing Mass
 mass_props["wing"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
                  0.0051 *
@@ -657,6 +659,7 @@ mass_props["wing"] = asb.mass_properties_from_radius_of_gyration(
     radius_of_gyration_z=wing_span / 12 ** 0.5,
 )
 
+# HStab Mass
 wing_to_hstab_distance = hstab.aerodynamic_center()[0] - wing.aerodynamic_center()[0]
 
 mass_props["hstab"] = asb.mass_properties_from_radius_of_gyration(
@@ -676,6 +679,7 @@ mass_props["hstab"] = asb.mass_properties_from_radius_of_gyration(
     x_cg=hstab.aerodynamic_center()[0]
 )
 
+# VStab Mass
 wing_to_vstab_distance = vstab.aerodynamic_center()[0] - wing.aerodynamic_center()[0]
 
 mass_props["vstab"] = asb.mass_properties_from_radius_of_gyration(
@@ -831,6 +835,8 @@ mass_props["nacelles"] = asb.mass_properties_from_radius_of_gyration(
             (nacelle_wetted_area / u.foot ** 2) ** 0.224
     )
 )
+
+# Engine controls & Engine starter mass
 mass_props["engine_controls"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
                  5 * n_engines +
@@ -849,6 +855,7 @@ mass_props["starter"] = asb.mass_properties_from_radius_of_gyration(
     x_cg=x_engines
 )
 
+# Flight controls mass
 control_surface_area = 0.15 * (
         wing.area() +
         hstab.area() +
@@ -873,6 +880,7 @@ mass_props["flight_controls"] = asb.mass_properties_from_radius_of_gyration(
     )
 )
 
+# Instruments mass
 n_crew = 2
 
 mass_props["instruments"] = asb.mass_properties_from_radius_of_gyration(
@@ -886,6 +894,7 @@ mass_props["instruments"] = asb.mass_properties_from_radius_of_gyration(
     x_cg=x_nose_to_fwd_tank
 )
 
+# Hydraulics mass
 mass_props["hydraulics"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
                  0.2673 *
@@ -895,6 +904,7 @@ mass_props["hydraulics"] = asb.mass_properties_from_radius_of_gyration(
     x_cg=wing.xsecs[0].xyz_le[0] + wing.xsecs[0].chord
 )
 
+# Electrical mass
 mass_props["electrical"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
                  7.291 *
@@ -905,6 +915,7 @@ mass_props["electrical"] = asb.mass_properties_from_radius_of_gyration(
     x_cg=x_engines
 )
 
+# Avionics mass
 mass_props["avionics"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
                  1.73 *
@@ -913,17 +924,19 @@ mass_props["avionics"] = asb.mass_properties_from_radius_of_gyration(
     x_cg=x_nose_to_fwd_tank
 )
 
+# Anti-ice mass
 mass_props["anti-ice"] = asb.mass_properties_from_radius_of_gyration(
     mass=0.002 * design_mass_TOGW,
     x_cg=wing.aerodynamic_center()[0]
 )
 
+# Handling gear mass
 mass_props["handling_gear"] = asb.mass_properties_from_radius_of_gyration(
     mass=3e-4 * design_mass_TOGW,
     x_cg=x_cabin_midpoint
 )
 
-# Fuel tank weights
+# Fuel tank masses
 fwd_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * fwd_fuel_tank_length
 aft_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * aft_fuel_tank_length
 
@@ -950,6 +963,28 @@ mass_props_full_fuel_aft = asb.mass_properties_from_radius_of_gyration(
 mass_props["fuel"] = mass_props_full_fuel_fwd + mass_props_full_fuel_aft
 
 mass_props["tanks"] = mass_props["fuel"] / fuel_tank_fuel_mass_fraction * fuel_tank_tank_mass_fraction
+
+# Fuel system (lines, pumps) mass
+fuel_volume = fwd_fuel_tank_interior_volume + aft_fuel_tank_interior_volume
+
+if fuel_type == "Jet A":
+    fuel_system_mass_multiplier = 1
+elif fuel_type == "LH2":
+    fuel_system_mass_multiplier = 2.2
+elif fuel_type == "GH2":
+    fuel_system_mass_multiplier = 2.0
+else:
+    raise ValueError("Bad value of `fuel_type`!")
+
+mass_props["fuel_system"] = asb.mass_properties_from_radius_of_gyration(
+    mass=(
+                 2.405 *
+                 (fuel_volume / u.gallon) ** 0.606 *
+                 0.5 *  # Assume all fuel tanks are integral tanks
+                 n_engines ** 0.5 *  # Assume one fuel tank per engine
+                 fuel_system_mass_multiplier
+         ) * u.lbm
+)
 
 # Compute empty mass
 mass_props_empty = asb.MassProperties(mass=0)
@@ -1023,11 +1058,16 @@ excess_thrust = (design_max_thrust_engine * n_engines) - design_thrust_cruise_to
 climb_rate = excess_thrust * (250 * u.knot) / (mass_props_TOGW.mass * 9.81)
 climb_rate_ft_min = climb_rate / (u.foot / u.minute)
 
+transport_efficiency_MJ_per_seat_km = (
+                                              (mass_props["fuel"].mass * fuel_specific_energy) /
+                                              (n_pax * mission_range)
+                                      ) / (1e6 / 1e3)
+
+##### Section: Finalize Optimization Problem
 opti.subject_to([
     flight_range / mission_range > 1
 ])
 
-##### Section: Finalize Optimization Problem
 # opti.minimize(design_mass_TOGW)
 opti.minimize(fwd_fuel_tank_length)
 # opti.minimize(-mission_range / u.naut_mile)
@@ -1051,29 +1091,35 @@ if __name__ == '__main__':
     ##### Section: Printout
     print_title = lambda s: print(s.upper().join(["*" * 20] * 2))
 
+
+    def fmt(x):
+        return f"{s(x):.6g}"
+
+
     print_title("Outputs")
     for k, v in {
-        "flight_range_nmi"    : flight_range / u.naut_mile,
-        "mass_fuel_per_pax_mi": mass_props["fuel"].mass / (n_pax * (flight_range / u.naut_mile)),
-        "L/D"                 : LD_cruise,
+        "Flight Range"        : f"{fmt(flight_range / 1e3)} km ({fmt(flight_range / u.naut_mile)} nmi)",
+        "Fuel Burn"           : f"{fmt(mass_props['fuel'].mass / (n_pax * (flight_range / u.naut_mile)) * 1e3)} g/pax-mi",
+        "Transport Efficiency": f"{fmt(transport_efficiency_MJ_per_seat_km)} MJ/pax-km",
+        "L/D"                 : fmt(LD_cruise),
     }.items():
-        print(f"{k.rjust(25)} = {s(v):.6g}")
+        print(f"{k.rjust(25)} = {v}")
 
     print_title("Key design variables")
     for k, v in {
-        "fwd_fuel_tank_length"   : fwd_fuel_tank_length,
-        "fuselage_cabin_diameter": fuselage_cabin_diameter,
-        "mass_TOGW"              : mass_props_TOGW.mass,
-        "mass_empty"             : mass_props_empty.mass,
-        "mach_cruise"            : mach_cruise,
-        "altitude_cruise"        : altitude_cruise,
-        "alpha"                  : dyn.alpha,
+        "fwd_fuel_tank_length"   : f"{fmt(fwd_fuel_tank_length)} m ({fmt(fwd_fuel_tank_length / u.foot)} ft)",
+        "fuselage_cabin_diameter": f"{fmt(fuselage_cabin_diameter)} m ({fmt(fuselage_cabin_diameter / u.foot)} ft",
+        "mass_TOGW"              : f"{fmt(mass_props_TOGW.mass)} kg ({fmt(mass_props_TOGW.mass / u.lbm)} lbm)",
+        "mass_empty"             : f"{fmt(mass_props_empty.mass)} kg ({fmt(mass_props_empty.mass / u.lbm)} lbm)",
+        "mach_cruise"            : f"{fmt(mach_cruise)}",
+        "altitude_cruise"        : f"{fmt(altitude_cruise)} m ({fmt(altitude_cruise / u.foot)} ft)",
+        "alpha"                  : f"{fmt(dyn.alpha)}",
     }.items():
-        print(f"{k.rjust(25)} = {s(v):.6g}")
+        print(f"{k.rjust(25)} = {v}")
 
     print_title("Mass props")
     for k, v in mass_props.items():
-        print(f"{k.rjust(25)} = {v.mass:.0f} kg")
+        print(f"{k.rjust(25)} = {v.mass:.0f} kg ({v.mass / u.lbm:.0f} lbm)")
 
     ##### Section: Geometry
     airplane.draw_three_view(show=False)
@@ -1165,7 +1211,7 @@ if __name__ == '__main__':
 
     p.vline(
         mission_range / u.naut_mile,
-        text=f"Design Range ({mission_range/u.naut_mile:.0f} nmi)",
+        text=f"Design Range ({mission_range / u.naut_mile:.0f} nmi)",
         alpha=0.5
     )
 
