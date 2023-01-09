@@ -979,7 +979,7 @@ else:
 mass_props["fuel_system"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
                  2.405 *
-                 (fuel_volume / u.gallon) ** 0.606 *
+                 (fuel_volume / 0.0037854117839999997) ** 0.606 *
                  0.5 *  # Assume all fuel tanks are integral tanks
                  n_engines ** 0.5 *  # Assume one fuel tank per engine
                  fuel_system_mass_multiplier
@@ -1125,7 +1125,7 @@ if __name__ == '__main__':
     airplane.draw_three_view(show=False)
     plt.savefig("figures/three_view.png")
     plt.savefig("figures/three_view.svg")
-    plt.show()
+    plt.show(dpi=72)
 
     ##### Section: Aero Polar
 
