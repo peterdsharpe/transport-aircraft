@@ -37,6 +37,6 @@ pump_power_hp = pump_power_pipeline/746 #hp
 print("Pump Power [hp]: ", pump_power_hp)
 
 energy_demand_ORD = 42200000 #kWh/day
-energy_demand_pump = pump_power_pipeline*24/1000 + pump_power_refueling*refueling_time/60/1000 #kWh/day
+energy_demand_pump = pump_power_pipeline*24/1000 + pump_power_refueling*refueling_time*54/60/1000 #kWh/day
 pump_energy_percent = energy_demand_pump/(energy_demand_ORD+energy_demand_pump)*100
 print("Pump Energy Percent of Total Energy Required: ", pump_energy_percent)
