@@ -30,13 +30,16 @@ pipe_diameter = 0.5 #m
 refueling_time = 9.81 #min
 fueling_flow_rate = 50 #kg/s
 [dP, dH] = pipe_losses(pipe_length, pipe_diameter, fueling_flow_rate)
-pump_power_refueling = dH*fueling_flow_rate*9.81 #W
+pump_power_refueling = (dH + pipe_length)*fueling_flow_rate*9.81 #W
 [dP, dH] = pipe_losses(19000, 0.4, fueling_flow_rate)
 pump_power_pipeline = dH*fueling_flow_rate*9.81 #W
 pump_power_hp = pump_power_pipeline/746 #hp
 print("Pump Power [hp]: ", pump_power_hp)
 
 energy_demand_ORD = 42200000 #kWh/day
-energy_demand_pump = pump_power_pipeline*24/1000 + pump_power_refueling*refueling_time*54/60/1000 #kWh/day
-pump_energy_percent = energy_demand_pump/(energy_demand_ORD+energy_demand_pump)*100
-print("Pump Energy Percent of Total Energy Required: ", pump_energy_percent)
+energy_demand_pipeline = pump_power_pipeline*24/1000 #kWh/day
+energy_demand_fueling = pump_power_refueling*refueling_time/60/1000*54 #kWh/day
+pipeline_energy_percent = energy_demand_pipeline/(energy_demand_ORD+energy_demand_fueling + energy_demand_pipeline)*100
+fueling_energy_percent = energy_demand_fueling/(energy_demand_ORD+energy_demand_fueling + energy_demand_pipeline)*100
+print("Pipeline Pump Energy Percent of Total Energy Required: ", pipeline_energy_percent)
+print("Fueling Pump Energy Percent of Total Energy Required: ", fueling_energy_percent)
