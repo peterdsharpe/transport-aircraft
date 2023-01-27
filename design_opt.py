@@ -31,16 +31,19 @@ if fuel_type == "LH2":
     fuel_density = 70  # kg/m^3
     fuel_specific_energy = 119.93e6  # J/kg; lower heating value due to liquid start
     fuel_tank_fuel_mass_fraction = 1 / (1 + 0.356)  # from Brewer, Hydrogen Aircraft Technology pg. 203
+    fuel_placement = "fuselage"
 elif fuel_type == "GH2":
     fuel_tank_wall_thickness = 0.0612  # from Brewer, Hydrogen Aircraft Technology pg. 203
     fuel_density = 42  # kg/m^3
     fuel_specific_energy = 141.80e6  # J/kg; higher heating value due to gas start
     fuel_tank_fuel_mass_fraction = 0.11  # Eremenko
+    fuel_placement = "fuselage"
 elif fuel_type == "Jet A":
     fuel_tank_wall_thickness = 0.005
     fuel_density = 820  # kg/m^3
     fuel_specific_energy = 43.02e6  # J/kg
     fuel_tank_fuel_mass_fraction = 0.993
+    fuel_placement = "wing"
 else:
     raise ValueError("Bad value of `fuel_type`!")
 
@@ -59,26 +62,39 @@ Note that the nose of the airplane is slightly below (-z) the centerline of the 
 ### Fuselage
 
 fuselage_cabin_diameter = opti.variable(
-    init_guess=20.4 * u.foot,
-    lower_bound=1e-3,
-    freeze=True,
+    init_guess=6.20,  # 20.4 * u.foot,
+    lower_bound=1.5,
+    upper_bound=12,
+    # freeze=True,
 )
 fuselage_cabin_radius = fuselage_cabin_diameter / 2
 fuselage_cabin_xsec_area = np.pi * fuselage_cabin_radius ** 2
 
-fuselage_cabin_length = opti.variable(
-    init_guess=123.2 * u.foot,
-    # init_guess=123.2 * u.foot,
-    lower_bound=1e-3,
-    freeze=True,
+fuselage_cabin_length = (  # Scaled to keep constant (fuselage planform area / passenger) as 777-300ER
+        48.36 *  # (123.2 * u.foot) *
+        (6.20 / fuselage_cabin_diameter) ** (4 / 3) *
+        (n_pax / 396)
 )
-fwd_fuel_tank_length = opti.variable(
-    init_guess=6,
-    # lower_bound=1e-3,
-    log_transform=True
-    # freeze=True,
-)
-aft_fuel_tank_length = fwd_fuel_tank_length
+
+if fuel_placement == "fuselage":
+    fwd_fuel_tank_length = opti.variable(
+        init_guess=6,
+        lower_bound=1e-3,
+        log_transform=True
+    )
+    aft_fuel_tank_length = fwd_fuel_tank_length
+
+elif fuel_placement == "wing":
+    fuel_mass = opti.variable(
+        init_guess=50e3,
+        lower_bound=1e-3
+    )
+
+    fwd_fuel_tank_length = 0
+    aft_fuel_tank_length = 0
+
+else:
+    raise ValueError("Bad value of `fuel_placement`!")
 
 # Compute x-locations of various fuselage stations
 nose_fineness_ratio = 1.67
@@ -158,32 +174,33 @@ r_fuse_sections.append(
     )
 )
 
-# Fwd tank
-x_sect_nondim = np.linspace(0, 1, 2)
-z_sect_nondim = np.zeros_like(x_sect_nondim)
-r_sect_nondim = np.ones_like(x_sect_nondim)
+if fuel_placement == "fuselage":
+    # Fwd tank
+    x_sect_nondim = np.linspace(0, 1, 2)
+    z_sect_nondim = np.zeros_like(x_sect_nondim)
+    r_sect_nondim = np.ones_like(x_sect_nondim)
 
-x_fuse_sections.append(
-    linear_map(
-        f_in=x_sect_nondim,
-        min_in=0, max_in=1,
-        min_out=x_nose_to_fwd_tank, max_out=x_fwd_tank_to_cabin
+    x_fuse_sections.append(
+        linear_map(
+            f_in=x_sect_nondim,
+            min_in=0, max_in=1,
+            min_out=x_nose_to_fwd_tank, max_out=x_fwd_tank_to_cabin
+        )
     )
-)
-z_fuse_sections.append(
-    linear_map(
-        f_in=z_sect_nondim,
-        min_in=0, max_in=1,
-        min_out=0, max_out=fuselage_cabin_radius
+    z_fuse_sections.append(
+        linear_map(
+            f_in=z_sect_nondim,
+            min_in=0, max_in=1,
+            min_out=0, max_out=fuselage_cabin_radius
+        )
     )
-)
-r_fuse_sections.append(
-    linear_map(
-        f_in=r_sect_nondim,
-        min_in=0, max_in=1,
-        min_out=0, max_out=fuselage_cabin_radius
+    r_fuse_sections.append(
+        linear_map(
+            f_in=r_sect_nondim,
+            min_in=0, max_in=1,
+            min_out=0, max_out=fuselage_cabin_radius
+        )
     )
-)
 
 # Cabin
 x_sect_nondim = np.linspace(0, 1, 2)
@@ -213,31 +230,32 @@ r_fuse_sections.append(
 )
 
 # Aft Tank
-x_sect_nondim = np.linspace(0, 1, 2)
-z_sect_nondim = np.zeros_like(x_sect_nondim)
-r_sect_nondim = np.ones_like(x_sect_nondim)
+if fuel_placement == "fuselage":
+    x_sect_nondim = np.linspace(0, 1, 2)
+    z_sect_nondim = np.zeros_like(x_sect_nondim)
+    r_sect_nondim = np.ones_like(x_sect_nondim)
 
-x_fuse_sections.append(
-    linear_map(
-        f_in=x_sect_nondim,
-        min_in=0, max_in=1,
-        min_out=x_cabin_to_aft_tank, max_out=x_aft_tank_to_tail
+    x_fuse_sections.append(
+        linear_map(
+            f_in=x_sect_nondim,
+            min_in=0, max_in=1,
+            min_out=x_cabin_to_aft_tank, max_out=x_aft_tank_to_tail
+        )
     )
-)
-z_fuse_sections.append(
-    linear_map(
-        f_in=z_sect_nondim,
-        min_in=0, max_in=1,
-        min_out=0, max_out=fuselage_cabin_radius
+    z_fuse_sections.append(
+        linear_map(
+            f_in=z_sect_nondim,
+            min_in=0, max_in=1,
+            min_out=0, max_out=fuselage_cabin_radius
+        )
     )
-)
-r_fuse_sections.append(
-    linear_map(
-        f_in=r_sect_nondim,
-        min_in=0, max_in=1,
-        min_out=0, max_out=fuselage_cabin_radius
+    r_fuse_sections.append(
+        linear_map(
+            f_in=r_sect_nondim,
+            min_in=0, max_in=1,
+            min_out=0, max_out=fuselage_cabin_radius
+        )
     )
-)
 
 # Tail
 x_sect_nondim = np.linspace(0, 1, 10)
@@ -310,7 +328,8 @@ wing_airfoil.generate_polars(
 wing_span = opti.variable(
     init_guess=214 * u.foot,
     lower_bound=0,
-    freeze=True
+    upper_bound=64.8
+    # freeze=True
 )
 wing_half_span = wing_span / 2
 
@@ -937,35 +956,47 @@ mass_props["handling_gear"] = asb.mass_properties_from_radius_of_gyration(
 )
 
 # Fuel tank masses
-fwd_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * fwd_fuel_tank_length
-aft_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * aft_fuel_tank_length
+if fuel_placement == "fuselage":
+    fwd_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * fwd_fuel_tank_length
+    aft_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * aft_fuel_tank_length
 
-fuel_tank_tank_mass_fraction = 1 - fuel_tank_fuel_mass_fraction
+    fuel_tank_interior_radius = fuselage_cabin_radius - fuel_tank_wall_thickness
+    fuel_tank_xsec_area = np.pi * fuel_tank_interior_radius ** 2
 
-fuel_tank_interior_radius = fuselage_cabin_radius - fuel_tank_wall_thickness
-fuel_tank_xsec_area = np.pi * fuel_tank_interior_radius ** 2
+    fwd_fuel_tank_interior_volume = fuel_tank_xsec_area * (fwd_fuel_tank_length - 2 * fuel_tank_wall_thickness)
+    aft_fuel_tank_interior_volume = fuel_tank_xsec_area * (aft_fuel_tank_length - 2 * fuel_tank_wall_thickness)
+    fuel_tank_interior_volume = fwd_fuel_tank_interior_volume + aft_fuel_tank_interior_volume
 
-fwd_fuel_tank_interior_volume = fuel_tank_xsec_area * (fwd_fuel_tank_length - 2 * fuel_tank_wall_thickness)
-aft_fuel_tank_interior_volume = fuel_tank_xsec_area * (aft_fuel_tank_length - 2 * fuel_tank_wall_thickness)
+    x_fwd_tank_midpoint = (x_nose_to_fwd_tank + x_fwd_tank_to_cabin) / 2
+    x_aft_tank_midpoint = (x_cabin_to_aft_tank + x_aft_tank_to_tail) / 2
 
-x_fwd_tank_midpoint = (x_nose_to_fwd_tank + x_fwd_tank_to_cabin) / 2
-x_aft_tank_midpoint = (x_cabin_to_aft_tank + x_aft_tank_to_tail) / 2
+    mass_props_full_fuel_fwd = asb.mass_properties_from_radius_of_gyration(
+        mass=fuel_density * fwd_fuel_tank_interior_volume,
+        x_cg=x_fwd_tank_midpoint
+    )
+    mass_props_full_fuel_aft = asb.mass_properties_from_radius_of_gyration(
+        mass=fuel_density * aft_fuel_tank_interior_volume,
+        x_cg=x_aft_tank_midpoint
+    )
 
-mass_props_full_fuel_fwd = asb.mass_properties_from_radius_of_gyration(
-    mass=fuel_density * fwd_fuel_tank_interior_volume,
-    x_cg=x_fwd_tank_midpoint
-)
-mass_props_full_fuel_aft = asb.mass_properties_from_radius_of_gyration(
-    mass=fuel_density * aft_fuel_tank_interior_volume,
-    x_cg=x_aft_tank_midpoint
-)
+    mass_props["fuel"] = mass_props_full_fuel_fwd + mass_props_full_fuel_aft
 
-mass_props["fuel"] = mass_props_full_fuel_fwd + mass_props_full_fuel_aft
+elif fuel_placement == "wing":
+    mass_props["fuel"] = asb.mass_properties_from_radius_of_gyration(
+        mass=fuel_mass,
+        x_cg=wing.aerodynamic_center()[0]
+    )
 
-mass_props["tanks"] = mass_props["fuel"] / fuel_tank_fuel_mass_fraction * fuel_tank_tank_mass_fraction
+    fuel_tank_interior_volume = fuel_mass / fuel_density
+
+
+else:
+    raise ValueError("Bad value of `fuel_placement`!")
+
+mass_props["tanks"] = mass_props["fuel"] / fuel_tank_fuel_mass_fraction * (1 - fuel_tank_fuel_mass_fraction)
 
 # Fuel system (lines, pumps) mass
-fuel_volume = fwd_fuel_tank_interior_volume + aft_fuel_tank_interior_volume
+fuel_volume = fuel_tank_interior_volume
 
 if fuel_type == "Jet A":
     fuel_system_mass_multiplier = 1
@@ -1041,6 +1072,9 @@ opti.subject_to([
     aero["Cm"] == 0
 ])
 
+##### Section: Boiloff
+
+
 ##### Section: Compute Range
 flight_range = (
         V_cruise *
@@ -1051,7 +1085,9 @@ flight_range = (
         )
 )
 
-# TODO add boiloff
+opti.subject_to([
+    flight_range / mission_range > 1
+])
 
 ##### Section: Compute other quantities
 excess_thrust = (design_max_thrust_engine * n_engines) - design_thrust_cruise_total
@@ -1064,12 +1100,13 @@ transport_efficiency_MJ_per_seat_km = (
                                       ) / (1e6 / 1e3)
 
 ##### Section: Finalize Optimization Problem
-opti.subject_to([
-    flight_range / mission_range > 1
-])
+# opti.subject_to([
+#     fuselage_cabin_diameter < 10
+# ])
 
 # opti.minimize(design_mass_TOGW)
-opti.minimize(fwd_fuel_tank_length)
+# opti.minimize(fwd_fuel_tank_length)
+opti.minimize(transport_efficiency_MJ_per_seat_km)
 # opti.minimize(-mission_range / u.naut_mile)
 
 if __name__ == '__main__':
@@ -1099,7 +1136,7 @@ if __name__ == '__main__':
     print_title("Outputs")
     for k, v in {
         "Flight Range"        : f"{fmt(flight_range / 1e3)} km ({fmt(flight_range / u.naut_mile)} nmi)",
-        "Fuel Burn"           : f"{fmt(mass_props['fuel'].mass / (n_pax * (flight_range / u.naut_mile)) * 1e3)} g/pax-mi",
+        "Fuel Burn"           : f"{fmt(1e3 * mass_props['fuel'].mass / (n_pax * (flight_range / u.kilo)))} g/pax-km",
         "Transport Efficiency": f"{fmt(transport_efficiency_MJ_per_seat_km)} MJ/pax-km",
         "L/D"                 : fmt(LD_cruise),
     }.items():
@@ -1107,13 +1144,15 @@ if __name__ == '__main__':
 
     print_title("Key design variables")
     for k, v in {
-        "fwd_fuel_tank_length"   : f"{fmt(fwd_fuel_tank_length)} m ({fmt(fwd_fuel_tank_length / u.foot)} ft)",
-        "fuselage_cabin_diameter": f"{fmt(fuselage_cabin_diameter)} m ({fmt(fuselage_cabin_diameter / u.foot)} ft",
+        # "fwd_fuel_tank_length"   : f"{fmt(fwd_fuel_tank_length)} m ({fmt(fwd_fuel_tank_length / u.foot)} ft)",
+
         "mass_TOGW"              : f"{fmt(mass_props_TOGW.mass)} kg ({fmt(mass_props_TOGW.mass / u.lbm)} lbm)",
         "mass_empty"             : f"{fmt(mass_props_empty.mass)} kg ({fmt(mass_props_empty.mass / u.lbm)} lbm)",
         "mach_cruise"            : f"{fmt(mach_cruise)}",
         "altitude_cruise"        : f"{fmt(altitude_cruise)} m ({fmt(altitude_cruise / u.foot)} ft)",
-        "alpha"                  : f"{fmt(dyn.alpha)}",
+        "alpha"                  : f"{fmt(dyn.alpha)} deg",
+        "fuselage_cabin_diameter": f"{fmt(fuselage_cabin_diameter)} m ({fmt(fuselage_cabin_diameter / u.foot)} ft)",
+        "fuse.length()"          : f"{fmt(fuse.length())} m ({fmt(fuse.length() / u.foot)} ft)"
     }.items():
         print(f"{k.rjust(25)} = {v}")
 
