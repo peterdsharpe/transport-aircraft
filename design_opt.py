@@ -706,7 +706,7 @@ mass_props["vstab"] = asb.mass_properties_from_radius_of_gyration(
                  (1 + 0) ** 0.225 *
                  (design_mass_TOGW / u.lbm) ** 0.556 *
                  ultimate_load_factor ** 0.536 *
-                 wing_to_vstab_distance ** -0.5 *
+                 (wing_to_vstab_distance / u.foot) ** -0.5 *
                  (vstab.area() / u.foot ** 2) ** 0.5 *
                  (wing_to_vstab_distance / u.foot) ** 0.875 *
                  np.cosd(vstab.mean_sweep_angle()) ** -1 *
