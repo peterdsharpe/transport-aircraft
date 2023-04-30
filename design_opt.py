@@ -22,8 +22,8 @@ n_pax = 400
 fuel_type = "LH2"
 # fuel_type = "GH2"
 
-reference_engine = "GE9X"
-# reference_engine = "GE90"
+# reference_engine = "GE9X"
+reference_engine = "GE90"
 
 ##### Section: Fuel Properties
 if fuel_type == "LH2":
@@ -72,7 +72,7 @@ fuselage_cabin_xsec_area = np.pi * fuselage_cabin_radius ** 2
 
 fuselage_cabin_length = (  # Scaled to keep constant (fuselage planform area / passenger) as 777-300ER
         48.36 *  # (123.2 * u.foot) *
-        (6.20 / fuselage_cabin_diameter) ** (4 / 3) *
+        (6.20 / fuselage_cabin_diameter) ** (1.15) *
         (n_pax / 396)
 )
 
@@ -1181,7 +1181,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
     plt.plot(aero_polar["alpha"], aero_polar["CL"] / aero_polar["CD"])
     p.show_plot(
-        "Aerodynamic Efficiency Polar",
+        "Untrimmed Aerodynamic Efficiency Polar",
         r"Angle of Attack $\alpha$ [deg]",
         r"Lift / Drag [-]"
     )
