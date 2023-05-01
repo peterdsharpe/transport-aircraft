@@ -18,7 +18,7 @@ mission_range = 7500 * u.naut_mile
 # mission_range = opti.variable(init_guess=2500 * u.naut_mile)
 n_pax = 400
 
-# fuel_type = "Jet A"
+# fuel_type = "kerosene"
 fuel_type = "LH2"
 # fuel_type = "GH2"
 
@@ -30,7 +30,7 @@ if fuel_type == "LH2":
     fuel_tank_wall_thickness = 0.0612  # from Brewer, Hydrogen Aircraft Technology pg. 203
     fuel_density = 70  # kg/m^3
     fuel_specific_energy = 119.93e6  # J/kg; lower heating value due to liquid start
-    fuel_tank_fuel_mass_fraction = 1 / (1 + 0.356)  # from Brewer, Hydrogen Aircraft Technology pg. 203
+    fuel_tank_fuel_mass_fraction = opti.parameter(1 / (1 + 0.356))  # from Brewer, Hydrogen Aircraft Technology pg. 203
     fuel_placement = "fuselage"
 elif fuel_type == "GH2":
     fuel_tank_wall_thickness = 0.0612  # from Brewer, Hydrogen Aircraft Technology pg. 203
@@ -38,7 +38,7 @@ elif fuel_type == "GH2":
     fuel_specific_energy = 141.80e6  # J/kg; higher heating value due to gas start
     fuel_tank_fuel_mass_fraction = 0.11  # Eremenko
     fuel_placement = "fuselage"
-elif fuel_type == "Jet A":
+elif fuel_type == "kerosene":
     fuel_tank_wall_thickness = 0.005
     fuel_density = 820  # kg/m^3
     fuel_specific_energy = 43.02e6  # J/kg
@@ -704,7 +704,7 @@ mass_props["tanks"] = mass_props["fuel"] / fuel_tank_fuel_mass_fraction * (1 - f
 # Fuel system (lines, pumps) mass
 fuel_volume = fuel_tank_interior_volume
 
-if fuel_type == "Jet A":
+if fuel_type == "kerosene":
     fuel_system_mass_multiplier = 1
 elif fuel_type == "LH2":
     fuel_system_mass_multiplier = 2.2
@@ -1172,7 +1172,10 @@ opti.subject_to([
 ])
 
 if __name__ == '__main__':
-    sol = opti.solve(behavior_on_failure="return_last")
+    sol = opti.solve(
+        max_iter=500,
+        behavior_on_failure="return_last"
+    )
 
     airplane = sol(airplane)
     dyn = sol(dyn)
