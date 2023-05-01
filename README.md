@@ -2,9 +2,7 @@
 
 Models for commercial transport aircraft based on AeroSandbox.
 
-Currently focuses on performance deltas between conventionally-fueled (Jet A) vs. liquid-hydrogen aircraft for long-haul transport.
-
-Work in progress.
+Currently focuses on performance deltas between conventionally-fueled (kerosene) vs. liquid-hydrogen aircraft for long-haul transport.
 
 ## Optimized LH2 Aircraft
 
