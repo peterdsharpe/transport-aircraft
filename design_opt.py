@@ -1,6 +1,7 @@
 import aerosandbox as asb
 import aerosandbox.numpy as np
 from aerosandbox.library import aerodynamics as lib_aero
+from aerosandbox.library.weights import torenbeek_weights, raymer_cargo_transport_weights, raymer_miscellaneous
 from aerosandbox.tools import units as u
 import copy
 from typing import Union, Callable, Optional
@@ -21,8 +22,8 @@ n_pax = 400
 fuel_type = "LH2"
 # fuel_type = "GH2"
 
-# reference_engine = "GE9X"
-reference_engine = "GE90"
+reference_engine = "GE9X"
+# reference_engine = "GE90"
 
 ##### Section: Fuel Properties
 if fuel_type == "LH2":
@@ -71,7 +72,7 @@ fuselage_cabin_xsec_area = np.pi * fuselage_cabin_radius ** 2
 
 fuselage_cabin_length = (  # Scaled to keep constant (fuselage planform area / passenger) as 777-300ER
         48.36 *  # (123.2 * u.foot) *
-        (6.20 / fuselage_cabin_diameter) ** (1.15) *
+        (6.20 / fuselage_cabin_diameter) ** (4/3) *
         (n_pax / 396)
 )
 
@@ -404,7 +405,7 @@ wing = asb.Wing(
     wing_x_le,
     0,
     wing_z_le
-]).subdivide_sections(3)
+]).subdivide_sections(2)
 
 ### Horizontal Stabilizer
 hstab_airfoil = asb.Airfoil("naca0012")
@@ -414,7 +415,7 @@ hstab_airfoil.generate_polars(
 )
 
 hstab_span = opti.variable(
-    init_guess=70.8 * u.foot,
+    init_guess=70.8 * u.foot * (64.8 / 60.9),
     lower_bound=0,
     freeze=True
 )
@@ -427,17 +428,9 @@ hstab_root_chord = opti.variable(
 )
 
 hstab_LE_sweep_deg = opti.variable(
-    init_guess=39,
+    init_guess=37,
     lower_bound=0,
     freeze=True
-)
-
-elevator = asb.ControlSurface(
-    name="All-moving Elevator",
-    deflection=opti.variable(
-        init_guess=0,
-        # freeze=True
-    )
 )
 
 hstab_root = asb.WingXSec(
@@ -445,7 +438,15 @@ hstab_root = asb.WingXSec(
     chord=hstab_root_chord,
     airfoil=hstab_airfoil,
     control_surfaces=[
-        elevator
+        asb.ControlSurface(
+            name="elevator",
+            deflection=opti.variable(
+                init_guess=0,
+                lower_bound=-45,
+                upper_bound=45,
+                # freeze=True
+            )
+        )
     ]
 )
 hstab_tip = asb.WingXSec(
@@ -473,7 +474,7 @@ hstab = asb.Wing(
     hstab_x_le,
     0,
     hstab_z_le
-]).subdivide_sections(3)
+]).subdivide_sections(2)
 
 ### Vertical Stabilizer
 vstab_airfoil = asb.Airfoil("naca0008")
@@ -485,17 +486,17 @@ vstab_airfoil.generate_polars(
 vstab_span = opti.variable(
     init_guess=29.6 * u.foot,
     lower_bound=0,
-    freeze=True
+    # freeze=True
 )
 
 vstab_root_chord = opti.variable(
     init_guess=22 * u.foot,
     lower_bound=0,
-    freeze=True
+    # freeze=True
 )
 
 vstab_LE_sweep_deg = opti.variable(
-    init_guess=45,
+    init_guess=40,
     lower_bound=0,
     freeze=True
 )
@@ -517,7 +518,7 @@ vstab_tip = asb.WingXSec(
 
 # Assemble the vstab
 vstab_x_le = x_tail - 1.5 * vstab_root_chord
-vstab_z_le = 1 * fuselage_cabin_radius
+vstab_z_le = 0.75 * fuselage_cabin_radius
 
 vstab = asb.Wing(
     name="Vertical Stabilizer",
@@ -529,7 +530,7 @@ vstab = asb.Wing(
     vstab_x_le,
     0,
     vstab_z_le
-]).subdivide_sections(3)
+]).subdivide_sections(2)
 
 ### Airplane
 airplane = asb.Airplane(
@@ -659,23 +660,125 @@ mass_props["buoyancy"] = asb.mass_properties_from_radius_of_gyration(
     radius_of_gyration_z=fuselage_cabin_length / 12 ** 0.5,
 )
 
-# Wing Mass
-mass_props["wing"] = asb.mass_properties_from_radius_of_gyration(
+# Fuel and fuel tank masses
+if fuel_placement == "fuselage":
+    fwd_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * fwd_fuel_tank_length
+    aft_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * aft_fuel_tank_length
+
+    fuel_tank_interior_radius = fuselage_cabin_radius - fuel_tank_wall_thickness
+    fuel_tank_xsec_area = np.pi * fuel_tank_interior_radius ** 2
+
+    fwd_fuel_tank_interior_volume = fuel_tank_xsec_area * (fwd_fuel_tank_length - 2 * fuel_tank_wall_thickness)
+    aft_fuel_tank_interior_volume = fuel_tank_xsec_area * (aft_fuel_tank_length - 2 * fuel_tank_wall_thickness)
+    fuel_tank_interior_volume = fwd_fuel_tank_interior_volume + aft_fuel_tank_interior_volume
+
+    x_fwd_tank_midpoint = (x_nose_to_fwd_tank + x_fwd_tank_to_cabin) / 2
+    x_aft_tank_midpoint = (x_cabin_to_aft_tank + x_aft_tank_to_tail) / 2
+
+    mass_props_full_fuel_fwd = asb.mass_properties_from_radius_of_gyration(
+        mass=fuel_density * fwd_fuel_tank_interior_volume,
+        x_cg=x_fwd_tank_midpoint,
+    )
+    mass_props_full_fuel_aft = asb.mass_properties_from_radius_of_gyration(
+        mass=fuel_density * aft_fuel_tank_interior_volume,
+        x_cg=x_aft_tank_midpoint
+    )
+
+    mass_props["fuel"] = mass_props_full_fuel_fwd + mass_props_full_fuel_aft
+
+elif fuel_placement == "wing":
+    mass_props["fuel"] = asb.mass_properties_from_radius_of_gyration(
+        mass=fuel_mass,
+        x_cg=wing.aerodynamic_center(chord_fraction=0.5)[0],
+        radius_of_gyration_x=0.3 * 0.5 * wing_span,
+        radius_of_gyration_z=0.3 * 0.5 * wing_span,
+    )
+
+    fuel_tank_interior_volume = fuel_mass / fuel_density
+
+else:
+    raise ValueError("Bad value of `fuel_placement`!")
+
+mass_props["tanks"] = mass_props["fuel"] / fuel_tank_fuel_mass_fraction * (1 - fuel_tank_fuel_mass_fraction)
+
+# Fuel system (lines, pumps) mass
+fuel_volume = fuel_tank_interior_volume
+
+if fuel_type == "Jet A":
+    fuel_system_mass_multiplier = 1
+elif fuel_type == "LH2":
+    fuel_system_mass_multiplier = 2.2
+elif fuel_type == "GH2":
+    fuel_system_mass_multiplier = 2.0
+else:
+    raise ValueError("Bad value of `fuel_type`!")
+
+mass_props["fuel_system"] = asb.mass_properties_from_radius_of_gyration(
     mass=(
-                 0.0051 *
-                 (design_mass_TOGW / u.lbm * ultimate_load_factor) ** 0.557 *
-                 (wing.area() / u.foot ** 2) ** 0.649 *
-                 wing.aspect_ratio() ** 0.5 *
-                 wing_airfoil.max_thickness() ** -0.4 *
-                 (1 + wing.taper_ratio()) ** 0.1 *
-                 np.cosd(wing.mean_sweep_angle()) ** -1 *
-                 (wing.area() / u.foot ** 2 * 0.1) ** 0.1
-         ) * u.lbm,
-    x_cg=wing.aerodynamic_center()[0],
+                 2.405 *
+                 (fuel_volume / u.gallon) ** 0.606 *
+                 0.5 *  # Assume all fuel tanks are integral tanks
+                 n_engines ** 0.5 *  # Assume one fuel tank per engine
+                 fuel_system_mass_multiplier
+         ) * u.lbm
+)
+
+# Wing Mass
+# mass_props["wing"] = asb.mass_properties_from_radius_of_gyration(
+#     mass=(
+#                  0.0051 *
+#                  (design_mass_TOGW / u.lbm * ultimate_load_factor) ** 0.557 *
+#                  (wing.area() / u.foot ** 2) ** 0.649 *
+#                  wing.aspect_ratio() ** 0.5 *
+#                  wing_airfoil.max_thickness() ** -0.4 *
+#                  (1 + wing.taper_ratio()) ** 0.1 *
+#                  np.cosd(wing.mean_sweep_angle()) ** -1 *
+#                  (wing.area() / u.foot ** 2 * 0.1) ** 0.1
+#          ) * u.lbm,
+#     x_cg=wing.aerodynamic_center(chord_fraction=0.40)[0],
+#     radius_of_gyration_x=wing_span / 12 ** 0.5,
+#     radius_of_gyration_y=wing_root_chord / 12 ** 0.5,
+#     radius_of_gyration_z=wing_span / 12 ** 0.5,
+# )
+
+suspended_mass = opti.variable(
+    init_guess=100e3,
+    lower_bound=0,
+)
+
+mass_props["wing"] = asb.mass_properties_from_radius_of_gyration(
+    mass=torenbeek_weights.mass_wing(
+        wing=wing,
+        design_mass_TOGW=design_mass_TOGW,
+        ultimate_load_factor=ultimate_load_factor,
+        suspended_mass=suspended_mass,
+        never_exceed_airspeed=atmo.speed_of_sound(),
+        max_airspeed_for_flaps=160 * u.knot,
+        main_gear_mounted_to_wing=True,
+    ),
+    x_cg=wing.aerodynamic_center(chord_fraction=0.40)[0],
+    z_cg=wing.aerodynamic_center(chord_fraction=0.40)[2],
     radius_of_gyration_x=wing_span / 12 ** 0.5,
     radius_of_gyration_y=wing_root_chord / 12 ** 0.5,
     radius_of_gyration_z=wing_span / 12 ** 0.5,
 )
+
+if fuel_placement == "wing":
+    opti.subject_to(
+        suspended_mass / 100e3 > (
+                design_mass_TOGW - mass_props["wing"].mass
+                - mass_props["fuel"].mass - mass_props["tanks"].mass
+                - mass_props["fuel_system"].mass
+        ) / 100e3
+    )
+elif fuel_placement == "fuselage":
+    opti.subject_to(
+        suspended_mass / 100e3 > (
+                design_mass_TOGW - mass_props["wing"].mass
+        ) / 100e3
+    )
+else:
+    raise ValueError(f"Invalid fuel placement: {fuel_placement}")
 
 # HStab Mass
 wing_to_hstab_distance = hstab.aerodynamic_center()[0] - wing.aerodynamic_center()[0]
@@ -694,7 +797,11 @@ mass_props["hstab"] = asb.mass_properties_from_radius_of_gyration(
                  hstab.aspect_ratio() ** 0.166 *
                  (1 + 0.1) ** 0.1
          ) * u.lbm,
-    x_cg=hstab.aerodynamic_center()[0]
+    x_cg=hstab.aerodynamic_center(chord_fraction=0.5)[0],
+    z_cg=vstab.aerodynamic_center(chord_fraction=0.5)[2],
+    radius_of_gyration_x=hstab_span / 12 ** 0.5,
+    radius_of_gyration_y=hstab_root_chord / 12 ** 0.5,
+    radius_of_gyration_z=hstab_span / 12 ** 0.5,
 )
 
 # VStab Mass
@@ -713,34 +820,29 @@ mass_props["vstab"] = asb.mass_properties_from_radius_of_gyration(
                  vstab.aspect_ratio() ** 0.35 *
                  vstab_airfoil.max_thickness() ** -0.5
          ) * u.lbm,
-    x_cg=vstab.aerodynamic_center()[0]
+    x_cg=vstab.aerodynamic_center(chord_fraction=0.5)[0],
+    z_cg=vstab.aerodynamic_center(chord_fraction=0.5)[2],
+    radius_of_gyration_x=vstab_span / 12 ** 0.5,
+    radius_of_gyration_y=vstab_root_chord / 12 ** 0.5,
+    radius_of_gyration_z=vstab_span / 12 ** 0.5,
 )
 
 # Fuselage structure mass
-fuselage_structural_length = (x_aft_tank_to_tail - x_nose)
-K_ws = (
-        0.75 *
-        (
-                (1 + 2 * wing.taper_ratio()) /
-                (1 + wing.taper_ratio())
-        ) *
-        (
-                wing_span / fuselage_structural_length *
-                np.tand(wing.mean_sweep_angle())
-        )
-)  # weight constant from Raymer
-
 mass_props["fuselage"] = asb.mass_properties_from_radius_of_gyration(
-    mass=(
-                 0.3280 *
-                 1.25 *  # 2 cargo doors + 1 aft clamshell door
-                 1.0 *  # wing-yehudi-mounted main gear
-                 (design_mass_TOGW / u.lbm * ultimate_load_factor) ** 0.5 *
-                 (fuselage_structural_length / u.foot) ** 0.25 *
-                 (fuse.area_wetted() / u.foot ** 2) ** 0.302 *
-                 (1 + K_ws) ** 0.04 *
-                 (16) ** 0.10  # L/D
-         ) * u.lbm,
+    # mass=raymer_cargo_transport_weights.mass_fuselage(
+    #     fuselage=fuse,
+    #     design_mass_TOGW=design_mass_TOGW,
+    #     ultimate_load_factor=ultimate_load_factor,
+    #     L_over_D=LD_cruise,
+    #     main_wing=wing,
+    #     n_cargo_doors=2,
+    #     has_aft_clamshell_door=True,
+    # ),
+    mass=torenbeek_weights.mass_fuselage_simple(
+        fuselage=fuse,
+        never_exceed_airspeed=atmo.speed_of_sound(),
+        wing_to_tail_distance=wing_to_hstab_distance,
+    ),
     x_cg=x_cabin_midpoint,
     radius_of_gyration_x=0.5 * fuselage_cabin_radius,
     radius_of_gyration_y=fuselage_cabin_length / 12 ** 0.5,
@@ -892,9 +994,9 @@ mass_props["flight_controls"] = asb.mass_properties_from_radius_of_gyration(
                  (control_surface_sizing_Iyy_aircraft / (u.lbm * u.foot ** 2) * 1e-6) ** 0.07
          ) * u.lbm,
     x_cg=(
-            0.5 * wing.aerodynamic_center()[0] +
-            0.3 * hstab.aerodynamic_center()[0] +
-            0.2 * vstab.aerodynamic_center()[0]
+            0.5 * wing.aerodynamic_center(chord_fraction=0.7)[0] +
+            0.3 * hstab.aerodynamic_center(chord_fraction=0.7)[0] +
+            0.2 * vstab.aerodynamic_center(chord_fraction=0.7)[0]
     )
 )
 
@@ -945,75 +1047,13 @@ mass_props["avionics"] = asb.mass_properties_from_radius_of_gyration(
 # Anti-ice mass
 mass_props["anti-ice"] = asb.mass_properties_from_radius_of_gyration(
     mass=0.002 * design_mass_TOGW,
-    x_cg=wing.aerodynamic_center()[0]
+    x_cg=wing.aerodynamic_center(chord_fraction=0.1)[0]
 )
 
 # Handling gear mass
 mass_props["handling_gear"] = asb.mass_properties_from_radius_of_gyration(
     mass=3e-4 * design_mass_TOGW,
     x_cg=x_cabin_midpoint
-)
-
-# Fuel tank masses
-if fuel_placement == "fuselage":
-    fwd_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * fwd_fuel_tank_length
-    aft_fuel_tank_exterior_volume = fuselage_cabin_xsec_area * aft_fuel_tank_length
-
-    fuel_tank_interior_radius = fuselage_cabin_radius - fuel_tank_wall_thickness
-    fuel_tank_xsec_area = np.pi * fuel_tank_interior_radius ** 2
-
-    fwd_fuel_tank_interior_volume = fuel_tank_xsec_area * (fwd_fuel_tank_length - 2 * fuel_tank_wall_thickness)
-    aft_fuel_tank_interior_volume = fuel_tank_xsec_area * (aft_fuel_tank_length - 2 * fuel_tank_wall_thickness)
-    fuel_tank_interior_volume = fwd_fuel_tank_interior_volume + aft_fuel_tank_interior_volume
-
-    x_fwd_tank_midpoint = (x_nose_to_fwd_tank + x_fwd_tank_to_cabin) / 2
-    x_aft_tank_midpoint = (x_cabin_to_aft_tank + x_aft_tank_to_tail) / 2
-
-    mass_props_full_fuel_fwd = asb.mass_properties_from_radius_of_gyration(
-        mass=fuel_density * fwd_fuel_tank_interior_volume,
-        x_cg=x_fwd_tank_midpoint
-    )
-    mass_props_full_fuel_aft = asb.mass_properties_from_radius_of_gyration(
-        mass=fuel_density * aft_fuel_tank_interior_volume,
-        x_cg=x_aft_tank_midpoint
-    )
-
-    mass_props["fuel"] = mass_props_full_fuel_fwd + mass_props_full_fuel_aft
-
-elif fuel_placement == "wing":
-    mass_props["fuel"] = asb.mass_properties_from_radius_of_gyration(
-        mass=fuel_mass,
-        x_cg=wing.aerodynamic_center()[0]
-    )
-
-    fuel_tank_interior_volume = fuel_mass / fuel_density
-
-
-else:
-    raise ValueError("Bad value of `fuel_placement`!")
-
-mass_props["tanks"] = mass_props["fuel"] / fuel_tank_fuel_mass_fraction * (1 - fuel_tank_fuel_mass_fraction)
-
-# Fuel system (lines, pumps) mass
-fuel_volume = fuel_tank_interior_volume
-
-if fuel_type == "Jet A":
-    fuel_system_mass_multiplier = 1
-elif fuel_type == "LH2":
-    fuel_system_mass_multiplier = 2.2
-elif fuel_type == "GH2":
-    fuel_system_mass_multiplier = 2.0
-else:
-    raise ValueError("Bad value of `fuel_type`!")
-
-mass_props["fuel_system"] = asb.mass_properties_from_radius_of_gyration(
-    mass=(
-                 2.405 *
-                 (fuel_volume / u.gallon) ** 0.606 *
-                 0.5 *  # Assume all fuel tanks are integral tanks
-                 n_engines ** 0.5 *  # Assume one fuel tank per engine
-                 fuel_system_mass_multiplier
-         ) * u.lbm
 )
 
 # Compute empty mass
@@ -1037,7 +1077,7 @@ mass_props_half_fuel = mass_props_with_pax + mass_props["fuel"] * 0.5
 
 ### Constrain mass closure
 opti.subject_to([
-    mass_props_TOGW.mass < design_mass_TOGW
+    mass_props_TOGW.mass / 300e3 < design_mass_TOGW / 300e3
 ])
 
 ##### Section: Dynamics
@@ -1060,7 +1100,7 @@ aero = asb.AeroBuildup(
     airplane=airplane,
     op_point=dyn.op_point,
     xyz_ref=mass_props_half_fuel.xyz_cg
-).run()
+).run_with_stability_derivatives()
 
 aero["D"] = aero["D"] + 0.0060 * airplane.s_ref * dyn.op_point.dynamic_pressure()
 aero["CD"] = aero["D"] / dyn.op_point.dynamic_pressure() / airplane.s_ref
@@ -1069,6 +1109,24 @@ opti.subject_to([
     aero["L"] / 1e6 == g * mass_props_half_fuel.mass / 1e6,
     LD_cruise * aero["CD"] == aero["CL"],
     aero["Cm"] == 0
+])
+
+##### Section: Stability and Control
+from aerosandbox.dynamics.flight_dynamics.airplane import get_modes
+
+modes = get_modes(
+    airplane=airplane,
+    op_point=dyn.op_point,
+    mass_props=mass_props_half_fuel,
+    aero=aero,
+    g=9.81
+)
+
+Vh = (hstab.area() * wing_to_hstab_distance) / (wing.area() * wing.mean_aerodynamic_chord())
+Vv = (vstab.area() * wing_to_vstab_distance) / (wing.area() * wing_span)
+
+opti.subject_to([
+    aero["Cnb"] > 0,
 ])
 
 ##### Section: Boiloff
@@ -1108,18 +1166,17 @@ transport_efficiency_MJ_per_seat_km = (
 opti.minimize(transport_efficiency_MJ_per_seat_km)
 # opti.minimize(-mission_range / u.naut_mile)
 
+### Imposed constraints
+opti.subject_to([
+    vstab.aspect_ratio() < 2  # Needs to be imposed due to bad Raymer mass model for tails
+])
+
 if __name__ == '__main__':
-    try:
-        sol = opti.solve()
-    except RuntimeError:
-        sol = opti.debug
-    s = lambda x: sol.value(x)
+    sol = opti.solve(behavior_on_failure="return_last")
 
-    airplane.substitute_solution(sol)
-    dyn.substitute_solution(sol)
-
-    for v in mass_props.values():
-        v.substitute_solution(sol)
+    airplane = sol(airplane)
+    dyn = sol(dyn)
+    mass_props = sol(mass_props)
 
     import matplotlib.pyplot as plt
     import aerosandbox.tools.pretty_plots as p
@@ -1129,7 +1186,7 @@ if __name__ == '__main__':
 
 
     def fmt(x):
-        return f"{s(x):.6g}"
+        return f"{sol(x):.6g}"
 
 
     print_title("Outputs")
@@ -1173,7 +1230,7 @@ if __name__ == '__main__':
     aero_polar = asb.AeroBuildup(
         airplane=airplane,
         op_point=op_point_polar,
-        xyz_ref=mass_props_half_fuel.xyz_cg
+        xyz_ref=sol(mass_props_half_fuel.xyz_cg)
     ).run()
     aero_polar["alpha"] = op_point_polar.alpha
 
@@ -1186,7 +1243,7 @@ if __name__ == '__main__':
     )
 
     ##### Section: Mass Budget
-    fig, ax = plt.subplots(figsize=(12, 5), subplot_kw=dict(aspect="equal"), dpi=300)
+    fig, ax = plt.subplots(figsize=(12, 5), subplot_kw=dict(aspect="equal"), dpi=200)
 
     name_remaps = {
         **{
@@ -1210,18 +1267,18 @@ if __name__ == '__main__':
             n if n not in name_remaps.keys() else name_remaps[n]
             for n in mass_props.keys()
         ],
-        center_text=f"$\\bf{{Mass\\ Budget}}$\nTOGW: {s(mass_props_TOGW.mass):.0f} kg\nOEW: {s(mass_props_empty.mass):.0f} kg",
+        center_text=f"$\\bf{{Mass\\ Budget}}$\nTOGW: {sol(mass_props_TOGW.mass):.0f} kg\nOEW: {sol(mass_props_empty.mass):.0f} kg",
         label_format=lambda name, value, percentage: f"{name}, {value:.0f} kg, {percentage:.0f}%",
-        startangle=110,
+        startangle=35,
         arm_length=30,
         arm_radius=20,
-        y_max_labels=1.1
+        y_max_labels=1.3,
     )
     p.show_plot(savefig="figures/mass_budget.png")
 
     ##### Section: Payload-Range diagram
     pax_frac = np.linspace(0, 1)
-    flight_ranges = s(
+    flight_ranges = sol(
         V_cruise *
         LD_cruise *
         Isp *
