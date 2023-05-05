@@ -36,3 +36,7 @@ Currently focuses on performance deltas between conventionally-fueled (kerosene)
 #### LH2 Aircraft Fleet
 
 ![lh2_market_seg](figures/lh2_market_segmentation_2.svg)
+
+## Other Notes
+
+For more info, see [this presentation](./Design%20Drivers%20for%20Efficient%20Hydrogen%20Transport%20Aircraft.pdf).
