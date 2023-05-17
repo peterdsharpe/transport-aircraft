@@ -36,7 +36,7 @@ elif fuel_type == "GH2":
     fuel_tank_wall_thickness = 0.0612  # from Brewer, Hydrogen Aircraft Technology pg. 203
     fuel_density = 42  # kg/m^3
     fuel_specific_energy = 141.80e6  # J/kg; higher heating value due to gas start
-    fuel_tank_fuel_mass_fraction = 0.11  # Eremenko
+    fuel_tank_fuel_mass_fraction = 0.11  # Paul Eremenko, Universal Hydrogen
     fuel_placement = "fuselage"
 elif fuel_type == "kerosene":
     fuel_tank_wall_thickness = 0.005
