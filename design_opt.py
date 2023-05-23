@@ -18,8 +18,8 @@ mission_range = 7500 * u.naut_mile
 # mission_range = opti.variable(init_guess=2500 * u.naut_mile)
 n_pax = 400
 
-# fuel_type = "kerosene"
-fuel_type = "LH2"
+fuel_type = "kerosene"
+# fuel_type = "LH2"
 # fuel_type = "GH2"
 
 reference_engine = "GE9X"
@@ -1016,11 +1016,7 @@ mass_props["instruments"] = asb.mass_properties_from_radius_of_gyration(
 
 # Hydraulics mass
 mass_props["hydraulics"] = asb.mass_properties_from_radius_of_gyration(
-    mass=(
-                 0.2673 *
-                 6 *
-                 (fuselage_cabin_length / u.foot * wing_span / u.foot) ** 0.937
-         ) * u.lbm,
+    mass=0.015 * design_mass_TOGW,
     x_cg=wing.xsecs[0].xyz_le[0] + wing.xsecs[0].chord
 )
 
