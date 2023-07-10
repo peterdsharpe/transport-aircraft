@@ -1,6 +1,6 @@
 import numpy as np
 
-from design_opt import *
+from design_opt_variable_gravimetric_efficiency import *
 from study_colors import lh2_color, kerosene_color
 
 vals = np.sinspace(0.2221, 1, 21)[::-1]
