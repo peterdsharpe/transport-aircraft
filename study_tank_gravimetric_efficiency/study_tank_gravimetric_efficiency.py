@@ -34,7 +34,7 @@ p.plot_smooth(
     zorder=4,
 )
 
-point_design = (1 / (1 + 0.356), 0.904179)
+point_design = (1 / (1 + 0.356), 0.913871)
 
 plt.plot(
     [point_design[0]],
