@@ -10,7 +10,7 @@ def parse_table(data_string:str):
     columns = [
         "Temperature_K", "Temperature_C", "Temperature_F",
         "Pressure_MPa", "Pressure_bara", "Pressure_psia",
-        "Density_mol_dm3", "Density_g_l", "Density_kg_m3",
+        "Density_mol_dm3", "Density_kg_m3",
         "Specific_weight_lbm_ft3", "Specific_weight_sl_ft3_10_minus_3",
         "Specific_weight_N_m3", "Specific_weight_lbf_ft3"
     ]
@@ -28,7 +28,7 @@ def parse_table(data_string:str):
 
 data_liquid = """
 State Temperature Pressure Density Specific weight
-[K] [°C] [°F] [MPa] [bara] [psia] [mol/dm3] [g/l,] [kg/m3] [lbm/ft3] [sl/ft3*10-3 ] [N/m3] [lbf/ft3]
+[K] [°C] [°F] [MPa] [bara] [psia] [mol/dm3] [kg/m3] [lbm/ft3] [sl/ft3*10-3 ] [N/m3] [lbf/ft3]
 Liquid at equilibrium pressure
 13.96 -259.2 -434.5 0.00770 0.0770 1.12 38.15 76.91 4.801 149.2 754.2 4.801
 14 -259 -434 0.00789 0.0789 1.14 38.13 76.87 4.799 149.1 753.8 4.799
@@ -46,7 +46,7 @@ Liquid at equilibrium pressure
 
 data_gas = """
 State Temperature Pressure Density Specific weight
-[K] [°C] [°F] [MPa] [bara] [psia] [mol/dm3] [g/l,] [kg/m3] [lbm/ft3] [sl/ft3*10-3 ] [N/m3] [lbf/ft3]
+[K] [°C] [°F] [MPa] [bara] [psia] [mol/dm3] [kg/m3] [lbm/ft3] [sl/ft3*10-3 ] [N/m3] [lbf/ft3]
 Gas at equilibrium pressure
 13.96	-259.2	-434.5	0.00770	0.0770	1.12	0.06754	0.1362	8.50E-03	0.2642	1.335	8.50E-03
 14	-259	-434	0.00789	0.0789	1.14	0.06902	0.1391	8.69E-03	0.2700	1.365	8.69E-03
