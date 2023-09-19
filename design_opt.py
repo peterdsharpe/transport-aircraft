@@ -492,6 +492,7 @@ vstab_span = opti.variable(
 vstab_root_chord = opti.variable(
     init_guess=22 * u.foot,
     lower_bound=0,
+    upper_bound=wing_root_chord,
     # freeze=True
 )
 
@@ -590,7 +591,7 @@ mach_cruise = opti.variable(
 altitude_cruise = opti.variable(
     init_guess=35e3 * u.foot,
     scale=10e3 * u.foot,
-    lower_bound=10e3 * u.foot,  # Speed regulations
+    lower_bound=18e3 * u.foot,  # Speed regulations
     upper_bound=400e3 * u.foot,
     # freeze=True
 )
@@ -1164,7 +1165,11 @@ opti.minimize(transport_efficiency_MJ_per_seat_km)
 
 ### Imposed constraints
 opti.subject_to([
-    vstab.aspect_ratio() < 2  # Needs to be imposed due to bad Raymer mass model for tails
+    vstab.aspect_ratio() < 2,  # Needs to be imposed due to bad Raymer mass model for tails
+    vstab.mean_aerodynamic_chord() < wing.mean_aerodynamic_chord(),
+    hstab.mean_aerodynamic_chord() < wing.mean_aerodynamic_chord(),
+    aero["CL"] > 0,
+    wing_span > hstab_span,
 ])
 
 if __name__ == '__main__':
