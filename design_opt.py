@@ -18,8 +18,8 @@ mission_range = 7500 * u.naut_mile
 # mission_range = opti.variable(init_guess=2500 * u.naut_mile)
 n_pax = 400
 
-fuel_type = "kerosene"
-# fuel_type = "LH2"
+# fuel_type = "kerosene"
+fuel_type = "LH2"
 # fuel_type = "GH2"
 
 reference_engine = "GE9X"
@@ -71,9 +71,10 @@ fuselage_cabin_radius = fuselage_cabin_diameter / 2
 fuselage_cabin_xsec_area = np.pi * fuselage_cabin_radius ** 2
 
 fuselage_cabin_length = (  # Scaled to keep constant (fuselage planform area / passenger) as 777-300ER
-        48.36 *  # (123.2 * u.foot) *
-        (6.20 / fuselage_cabin_diameter) ** (4/3) *
-        (n_pax / 396)
+        46  # (123.2 * u.foot) *
+        * (6.20 / fuselage_cabin_diameter) ** (1.58)
+        # Exponent is an empirically tuned parameter assuming the B777 value of 6.20 m is the result of some unconstrained optimum
+        * (n_pax / 396)
 )
 
 if fuel_placement == "fuselage":
